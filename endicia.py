@@ -2,11 +2,11 @@ from logging import debug
 from io import StringIO
 import urllib2
 import urllib
-from pprint import pformat
 
 from serialization import to_xml
 from response import EndiciaResponse
-from enums import *
+from endiciapy.enums import ImageFormat, ImageRotation, ImageResolution,\
+    LabelSize, LabelType, NonDeliveryOption
 
 
 class Endicia(object):
@@ -196,7 +196,7 @@ class Endicia(object):
             services_attrs = put('SignatureConfirmation', _get('signature_confirmation'), services_attrs)
             labelRequest['Services'] = {'_': services_attrs, }
         
-        debug(pformat(labelRequest))
+#        debug(pformat(labelRequest))
         res = self.__post('GetPostageLabelXML', labelRequestXML={
             'LabelRequest': labelRequest,
         })
@@ -231,6 +231,19 @@ class Endicia(object):
             },
         })
         return res
+    
+    
+    def status_request(self, *pic_numbers):
+        pic_numbers = map(lambda x: {'PICNumber': x}, pic_numbers)
+        res = self.__post2('StatusRequest', XMLInput={
+            'StatusRequest': {
+                'AccountID': self.account_id,
+                'Test': 'Y' if self.test_mode else 'N',
+                'PassPhrase': self.pass_phrase,
+                'StatusList': pic_numbers,
+            } 
+        })
+        return res
 
 
     def __post(self, method, debug_mode=False, **data):
@@ -240,6 +253,21 @@ class Endicia(object):
         data = (key, xml.getvalue())
         if debug_mode: debug('\n%s', data[1])
         data = urllib.urlencode((data, ))
+        try:
+            response = urllib2.urlopen(url, data).read()
+            return EndiciaResponse(response)
+        except urllib2.HTTPError, e:
+            debug(e)
+            return None
+        
+    def __post2(self, method, debug_mode=False, **data):
+        url = 'https://www.endicia.com/ELS/ELSServices.cfc'
+        key, xml = data.keys()[0], StringIO()
+        to_xml(xml, data[key], format=self.format_xml)
+        data = (key, xml.getvalue())
+        if debug_mode: debug('\n%s', data[1])
+        data = urllib.urlencode((('Method', method), data))
+        if debug_mode: debug(data)
         try:
             response = urllib2.urlopen(url, data).read()
             return EndiciaResponse(response)
